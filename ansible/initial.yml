@@ -1,0 +1,77 @@
+# Step 1
+# Initial master and slave configuration
+- become: yes
+  hosts: loadbalancers
+  name: lb_config
+
+  tasks:
+    - name: Add hosts
+      become: yes
+      shell: |
+        sudo echo "[IP CONTROL-PLANE-1] control-plane-1" >> /etc/hosts
+        sudo echo "[IP CONTROL-PLANE-2] control-plane-2" >> /etc/hosts
+        sudo echo "[IP CONTROL-PLANE-3] control-plane-3" >> /etc/hosts
+        sudo echo "[VIRTUAL IP] vip-control-plane" >> /etc/hosts
+
+    - name: Install haproxy keepalived
+      apt:
+        name:
+          - haproxy
+          - keepalived
+
+    - name: Copy initial haproxy configuration
+      copy:
+        src: "../config/haproxy.cfg"
+        dest: "/etc/haproxy/haproxy.cfg"
+
+    - name: Copy script for keepalived
+      copy:
+        src: "../config/check_apiserver.sh"
+        dest: "/etc/keepalived/"
+
+    - name: Copy keepalived configuration
+      copy:
+        src: "../config/master/keepalived.conf"
+        dest: "/etc/keepalived/keepalived.conf"
+
+    - name: Change permission on keepalived script
+      become: yes
+      shell: |
+        sudo chmod +x /etc/keepalived/check_apiserver.sh
+
+# Step 2
+# Replace initial configuration for slave
+- become: yes
+  hosts: slave-lb
+  name: slave-lb-config
+
+  tasks:
+    - name: Copy keepalived configuration
+      copy:
+        src: "../config/slave/keepalived.conf"
+        dest: "/etc/keepalived/keepalived.conf"
+
+# Step 3
+# Replace initial configuration for master
+- become: yes
+  hosts: master-lb
+  name: master-lb-config
+
+  tasks:
+    - name: Copy keepalived configuration
+      copy:
+        src: "../config/master/keepalived.conf"
+        dest: "/etc/keepalived/keepalived.conf"
+
+# Step 4
+# Start all services
+- become: yes
+  hosts: loadbalancers
+  name: start-service
+
+  tasks:
+    - name: Add hosts
+      become: yes
+      shell: |
+        sudo systemctl enable keepalived --now
+        sudo systemctl enable haproxy --now
